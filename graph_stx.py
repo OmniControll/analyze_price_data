@@ -103,4 +103,5 @@ fig = result.plot()
 fig.set_size_inches(10, 8)
 plt.show()
 
-# Examine the BT
+# next time i will try to use a different feature engineering technique to see if we can get a better fit for the data
+# like polynomial regression, or maybe a different model altogether

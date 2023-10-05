@@ -28,7 +28,7 @@ def calculate_covariance_matrix(daily_returns):
 def calculate_portfolio_variance(weights, covariance_matrix):
     return np.dot(weights.T, np.dot(covariance_matrix, weights))
     
-#let's start with constructing our monte carlo simulation 
+#monte carlo simulation 
 
 def monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, risk_free_rate):
     num_assets = len(expected_returns)
@@ -84,21 +84,24 @@ def analyze_stocks(tickers, start_date, end_date, num_portfolios, risk_free_rate
     covariance_matrix = calculate_covariance_matrix(daily_returns)
     monte_carlo_results = monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, risk_free_rate)
     optimized_weights_np = optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate)
+    
     # Convert the NumPy array to a Python list
     optimized_weights_list = optimized_weights_np.tolist()
+
     # Convert tickers and weights to a dictionary
-    optimized_weights = dict(zip(tickers, optimized_weights_list))
-    top_portfolios = monte_carlo_results.sort_values(by='sharpe_ratio', ascending=False).head(5)
-    weights_dict = dict(zip(tickers, optimized_weights))
+    optimized_weights_dict = dict(zip(tickers, optimized_weights_list))
+
+    top_portfolios = monte_carlo_results.nlargest(10, 'sharpe_ratio')
 
     results = {
-        "optimized_weights": weights_dict,
-        "top_portfolios": top_portfolios,
+        "optimized_weights": optimized_weights_dict,
+        "optimized_return": top_portfolios.iloc[0]['return'],
+        "optimized_volatility": top_portfolios.iloc[0]['volatility'],
+        "top_portfolios": top_portfolios,  # Now defined
         "monte_carlo_results": monte_carlo_results,
-        "plot_path": plot_path
     }
-    
     return results
+
 
 
 #lets calculate the downside volatility, we need to replace the cases where returns exceeded the target return with 0, because we only care about when returns were less than target
@@ -110,44 +113,51 @@ def calculate_downside_deviation(daily_returns, weights, target_return=0.0):
     
     return downside_deviation
 
+#visualize results with new function
+
+def plot_efficient_frontier(monte_carlo_results, optimized_weights, optimized_return, optimized_volatility):
+    # Create a DataFrame that includes the portfolio weights
+    monte_carlo_results['text'] = monte_carlo_results.apply(lambda row: ', '.join([f"{ticker}: {row[f'weight_{ticker}']:.2f}" for ticker in optimized_weights.keys()]), axis=1)
+
+    # Create the figure
+    fig = px.scatter(monte_carlo_results, x="volatility", y="return", color="sharpe_ratio",
+                     hover_data=["text"],
+                     labels={'text': "Portfolio Weights"})
+
+    # Add markers for optimized portfolios
+    fig.add_scatter(x=[optimized_volatility], y=[optimized_return], mode='markers',
+                    marker=dict(size=[30], color=['blue']),
+                    hovertext=[', '.join([f"{ticker}: {weight:.2f}" for ticker, weight in optimized_weights.items()])],
+                    name="Optimized Portfolio")
+
+    fig.show()
+
+
+
+
+#a few things to note about the basket of stocks to pick:
+# correlation: different stocks in the same industry tend to move together, so we want to pick stocks that are not highly correlated
+# volatility: we want to pick stocks that are not too volatile, because we want to minimize risk
+# size of basket: we want to pick stocks that are not too correlated, but we also want to pick enough stocks to diversify our portfolio
+# lets pick 4 stocks from different industries, and see how they perform together
+
 def main():
-    portfolio = ['BTC-USD', 'TSLA', 'AMD', 'MSFT', 'AMZN']  
+    portfolio = ['ETH-USD', 'COIN', 'AAPL', 'NEE', 'NVDA', 'JPM', 'DIS', 'AMZN', 'AMD', 'SQ', 'TSLA', 'JNJ'] #add stocks to this list
     start_date = '2020-01-01'
     end_date = '2023-01-01'
     num_portfolios = 10000
     risk_free_rate = 0.02
-    stock_data = fetch_stock_data(portfolio, start_date, end_date)
-    daily_returns = calculate_daily_returns(stock_data)
-    expected_returns = calculate_expected_returns(daily_returns)
-    covariance_matrix = calculate_covariance_matrix(daily_returns)
-    monte_carlo_results = monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, risk_free_rate)
-    
-    weights = np.array([1 / len(portfolio)] * len(portfolio))
-    optimized_weights = optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate)
-    
-    weights_dict = {ticker: weight for ticker, weight in zip(portfolio, optimized_weights)}
-
-    portfolio_variance = calculate_portfolio_variance(weights, covariance_matrix)
-    expected_portfolio_return = np.sum(weights * expected_returns)
-    sharpe_ratio = (expected_portfolio_return - risk_free_rate) / np.sqrt(portfolio_variance)
-    
-    downside_deviation = calculate_downside_deviation(daily_returns, weights)
-    sortino_ratio = (expected_portfolio_return - risk_free_rate) / downside_deviation
-    top_portfolios = monte_carlo_results.sort_values(by='sharpe_ratio', ascending=False).head(5)
-    
-    results = {
-        'optimized_weights': weights_dict,
-        'expected_returns': expected_returns.tolist(),
-        'covariance_matrix': covariance_matrix.values.tolist(),
-        'portfolio_variance': portfolio_variance,
-        'sharpe_ratio': sharpe_ratio,
-        'sortino_ratio': sortino_ratio,
-        'top_portfolios': top_portfolios,
-        'plot_path': plot_path
-    }
+    results = analyze_stocks(portfolio, start_date, end_date, num_portfolios, risk_free_rate)
+    print("Top 5 portfolios based on Sharpe Ratio:\n", results['top_portfolios'])
 
     return results
 
-# Call the main function
 if __name__ == "__main__":
-    main()
+    results = main()
+    monte_carlo_results = results['monte_carlo_results']
+    plot_efficient_frontier(
+        monte_carlo_results, 
+        results['optimized_weights'], 
+        results['optimized_return'], 
+        results['optimized_volatility']
+    )
