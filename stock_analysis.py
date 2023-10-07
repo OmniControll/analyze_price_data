@@ -110,12 +110,16 @@ def calculate_downside_deviation(daily_returns, weights, target_return=0.0):
 #visualize results with new function
 def plot_efficient_frontier(monte_carlo_results, optimized_weights, optimized_return, optimized_volatility):
     # Create a Df includes the portfolio weights
+    #the lambda function adds a new column to the Df that contains the weights of each asset, formatted to two decimal places
     monte_carlo_results['text'] = monte_carlo_results.apply(lambda row: ', '.join([f"{ticker}: {row[f'weight_{ticker}']:.2f}" for ticker in optimized_weights.keys()]), axis=1)
-
+    monte_carlo_results['return'] *= 100
+    monte_carlo_results['volatility'] *= 100 #convert to percentage
+    #ensure the hover data shows the weights  (text column)
     fig = px.scatter(monte_carlo_results, x="volatility", y="return", color="sharpe_ratio",
-                     hover_data=["text"],
+                     hover_data={"text": True, 'return': ':.2f%', 'volatility': ':.2f%', 'sharpe_ratio': ':.2f%'}, #formatting
                      labels={'text': "Portfolio Weights"})
-    # Add markers for optimized portfolios
+    fig.update_layout(xaxis_title="Volatility (%)", yaxis_title="Return (%)") #formatting                 
+    # Add marker for optimized portfolios
     fig.add_scatter(x=[optimized_volatility], y=[optimized_return], mode='markers',
                     marker=dict(size=[30], color=['blue']),
                     hovertext=[', '.join([f"{ticker}: {weight:.2f}" for ticker, weight in optimized_weights.items()])],
