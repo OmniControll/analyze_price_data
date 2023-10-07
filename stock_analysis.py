@@ -7,6 +7,7 @@ import plotly.express as px
 #This code is modular, with functions handling specific tasks.
 #The goal is to handle data fetching, financial calculations, optimization, and visualization.
 #The main function will ensure the sequence of operations
+
 #first lets get the stock data from yfinance and do some basic financial calculations
 
 def fetch_stock_data(tickers, start_date, end_date):
@@ -107,7 +108,7 @@ def calculate_downside_deviation(daily_returns, weights, target_return=0.0):
     downside_deviation = np.sqrt(np.mean(np.square(downside_diff)))
     return downside_deviation
 
-#visualize results with new function
+#visualize results with plotly`s scatter plot`
 def plot_efficient_frontier(monte_carlo_results, optimized_weights, optimized_return, optimized_volatility):
     # Create a Df includes the portfolio weights
     #the lambda function adds a new column to the Df that contains the weights of each asset, formatted to two decimal places
@@ -130,11 +131,10 @@ def plot_efficient_frontier(monte_carlo_results, optimized_weights, optimized_re
 
 #a few things to note about the basket of stocks to pick:
 # correlation: different stocks in the same industry tend to move together, so we want to pick stocks that are not highly correlated
-# volatility: we want to pick stocks that are not too volatile, because we want to minimize risk
 # size of basket: we want to pick stocks that are not too correlated, but we also want to pick enough stocks to diversify our portfolio
 
 def main():
-    portfolio = ['ETH-USD', 'COIN', 'AAPL', 'NEE', 'NVDA', 'JPM', 'DIS', 'AMZN', 'AMD', 'SQ', 'TSLA', 'JNJ'] #add stocks to this list
+    portfolio = ['ETH-USD', 'COIN', 'AAPL', 'MSFT', 'NVDA', 'JPM', 'DIS', 'AMZN', 'AMD', 'GOOGL', 'TSLA', 'JNJ'] #add stocks to this list
     start_date = '2020-01-01'
     end_date = '2023-01-01'
     num_portfolios = 10000
