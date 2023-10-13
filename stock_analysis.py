@@ -14,15 +14,15 @@ def fetch_stock_data(tickers, start_date, end_date): #fetches stock data from yf
     stock_data = yf.download(tickers, start=start_date, end=end_date)['Adj Close'] #get the adjusted close price for each stock
     return stock_data
 
-def calculate_daily_returns(stock_data): #calculates daily returns
+def calculate_daily_returns(stock_data): 
     daily_returns = stock_data.pct_change().dropna() #pct_change() calculates the percentage change between the current and prior element
     return daily_returns
 
-def calculate_expected_returns(daily_returns): #calculates expected returns
-    return daily_returns.mean()
+def calculate_expected_returns(daily_returns): 
+    return daily_returns.mean() #mean() calculates the average of the values in the array
 
-def calculate_covariance_matrix(daily_returns): #calculates covariance matrix
-    return daily_returns.cov()
+def calculate_covariance_matrix(daily_returns): 
+    return daily_returns.cov() #cov() calculates the covariance between the columns of a Df
 
 def calculate_portfolio_variance(weights, covariance_matrix): #calculates portfolio variance
     return np.dot(weights.T, np.dot(covariance_matrix, weights)) #np.dot() calculates the dot product of two arrays
@@ -43,7 +43,7 @@ def monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, 
         sharpe_ratio = (portfolio_return - risk_free_rate) / portfolio_volatility #sharpe ratio
 
         # store the results
-        results[i, 0:num_assets] = weights 
+        results[i, 0:num_assets] = weights  #store the weights
         results[i, num_assets] = portfolio_return  #return is the sum of the weights times the expected returns
         results[i, num_assets + 1] = portfolio_volatility  #volatility is the standard deviation of returns
         results[i, num_assets + 2] = sharpe_ratio #sharpe ratio is the return of the portfolio minus the risk free rate, divided by the volatility
@@ -69,7 +69,7 @@ def optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate):
     #bounds for each weight (0,1)
     bounds = [(0, 1) for _ in range(num_assets)] #list comprehension
     #starting point
-    initial_weights = np.array([1 / num_assets] * num_assets)
+    initial_weights = np.array([1 / num_assets] * num_assets) #initialize weights to 1/num_assets
     optimized_weights = minimize(objective_function, initial_weights, method='SLSQP', bounds=bounds, constraints=constraints)
     return optimized_weights.x
 
@@ -105,16 +105,16 @@ def analyze_stocks(tickers, start_date, end_date, num_portfolios, risk_free_rate
 def calculate_downside_deviation(daily_returns, weights, target_return=0.0):
     portfolio_returns = daily_returns.dot(weights)  # take dot product of weights and returns, the dot product is, simply put, a measure of similarity between two vectors
     downside_diff = target_return - portfolio_returns #calculate the difference between the target return and the portfolio return
-    downside_diff[downside_diff < 0] = 0 
+    downside_diff[downside_diff < 0] = 0  # replace negative values with 0
     downside_deviation = np.sqrt(np.mean(np.square(downside_diff))) #square the difference, take the mean, and take the square root
     return downside_deviation
 
 #visualize results with plotly`s scatter plot`
-def plot_efficient_frontier(monte_carlo_results, optimized_weights, optimized_return, optimized_volatility):
+def plot_monte_carlo_results(monte_carlo_results, optimized_weights, optimized_return, optimized_volatility):
     # Create a Df includes the portfolio weights
     #the lambda function adds a new column to the Df that contains the weights of each asset, formatted to two decimal places
     monte_carlo_results['text'] = monte_carlo_results.apply(lambda row: ', '.join([f"{ticker}: {row[f'weight_{ticker}']:.2f}" for ticker in optimized_weights.keys()]), axis=1)
-    monte_carlo_results['return'] *= 100
+    monte_carlo_results['return'] *= 100 #convert to percentage
     monte_carlo_results['volatility'] *= 100 #convert to percentage
     #ensure the hover data shows the weights  (text column)
     fig = px.scatter(monte_carlo_results, x="volatility", y="return", color="sharpe_ratio",
@@ -122,12 +122,13 @@ def plot_efficient_frontier(monte_carlo_results, optimized_weights, optimized_re
                      labels={'text': "Portfolio Weights"})
     fig.update_layout(xaxis_title="Volatility (%)", yaxis_title="Return (%)") #formatting                 
     # Add marker for optimized portfolios
-    fig.add_scatter(x=[optimized_volatility], y=[optimized_return], mode='markers',
-                    marker=dict(size=[30], color=['blue']),
-                    hovertext=[', '.join([f"{ticker}: {weight:.2f}" for ticker, weight in optimized_weights.items()])],
+    fig.add_scatter(x=[optimized_volatility], y=[optimized_return], mode='markers', 
+                    marker=dict(size=[30], color=['blue']), #formatting
+                    hovertext=[', '.join([f"{ticker}: {weight:.2f}" for ticker, weight in optimized_weights.items()])], #formatting
                     name="Optimized Portfolio")
-
+    print("About to show figure...")
     fig.show()
+    print("Figure should be displayed.")
 
 
 #a few things to note about the basket of stocks to pick:
@@ -148,7 +149,7 @@ def main():
 if __name__ == "__main__":
     results = main()
     monte_carlo_results = results['monte_carlo_results']
-    plot_efficient_frontier(
+    plot_monte_carlo_results( 
         monte_carlo_results, 
         results['optimized_weights'], 
         results['optimized_return'], 
