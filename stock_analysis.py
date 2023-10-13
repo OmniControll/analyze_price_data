@@ -34,7 +34,7 @@ def monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, 
 
     for i in range(num_portfolios): #loop through each portfolio
         # random weights for our portfolio simulation
-        weights = np.random.random(num_assets) 
+        weights = np.random.random(num_assets)  #generate random weights
         weights /= np.sum(weights) #normalize weights so they add up to 1
 
         # Calculations portfolio return, volatility, and Sharpe ratio
@@ -44,9 +44,9 @@ def monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, 
 
         # store the results
         results[i, 0:num_assets] = weights 
-        results[i, num_assets] = portfolio_return 
-        results[i, num_assets + 1] = portfolio_volatility
-        results[i, num_assets + 2] = sharpe_ratio
+        results[i, num_assets] = portfolio_return  #return is the sum of the weights times the expected returns
+        results[i, num_assets + 1] = portfolio_volatility  #volatility is the standard deviation of returns
+        results[i, num_assets + 2] = sharpe_ratio #sharpe ratio is the return of the portfolio minus the risk free rate, divided by the volatility
 
     # Create a Df
     columns = [f'weight_{asset}' for asset in expected_returns.index] + ['return', 'volatility', 'sharpe_ratio'] #column names
@@ -58,9 +58,9 @@ def optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate):
     num_assets = len(expected_returns)
 # to calculate the optimized (maximized) sharpe ratio, we need to minimize the negative of it. 
 # the function below calculates the var. and return, then outputs the negated sharpe ratio
-    def objective_function(weights):
-        portfolio_variance = calculate_portfolio_variance(weights, covariance_matrix) 
-        expected_portfolio_return = np.sum(weights * expected_returns)  
+    def objective_function(weights): #objective function to minimize the negative sharpe ratio
+        portfolio_variance = calculate_portfolio_variance(weights, covariance_matrix)  #calculate portfolio variance
+        expected_portfolio_return = np.sum(weights * expected_returns)  #calculate expected portfolio return
         neg_sharpe_ratio = - (expected_portfolio_return - risk_free_rate) / np.sqrt(portfolio_variance) #negated sharpe ratio
         return neg_sharpe_ratio
     
@@ -77,12 +77,12 @@ def optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate):
 # We also list the simulated portfolios by their Sharpe ratio in descending order, and select the top 5..
 
 def analyze_stocks(tickers, start_date, end_date, num_portfolios, risk_free_rate):
-    stock_data = fetch_stock_data(tickers, start_date, end_date) 
-    daily_returns = calculate_daily_returns(stock_data)
-    expected_returns = calculate_expected_returns(daily_returns) 
-    covariance_matrix = calculate_covariance_matrix(daily_returns)
-    monte_carlo_results = monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, risk_free_rate) 
-    optimized_weights_np = optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate)
+    stock_data = fetch_stock_data(tickers, start_date, end_date)  # get stock data
+    daily_returns = calculate_daily_returns(stock_data) # calculate daily returns
+    expected_returns = calculate_expected_returns(daily_returns)  # calculate expected returns
+    covariance_matrix = calculate_covariance_matrix(daily_returns) # calculate covariance matrix
+    monte_carlo_results = monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, risk_free_rate)  # run monte carlo simulation
+    optimized_weights_np = optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate) # optimize for Sharpe ratio
     
     optimized_weights_list = optimized_weights_np.tolist() 
     
@@ -91,7 +91,7 @@ def analyze_stocks(tickers, start_date, end_date, num_portfolios, risk_free_rate
     top_portfolios = monte_carlo_results.nlargest(10, 'sharpe_ratio')  # get top 10 portfolios by Sharpe ratio
 
     results = {
-        "optimized_weights": optimized_weights_dict,
+        "optimized_weights": optimized_weights_dict, 
         "optimized_return": top_portfolios.iloc[0]['return'],
         "optimized_volatility": top_portfolios.iloc[0]['volatility'],
         "top_portfolios": top_portfolios,  # Now defined
@@ -103,7 +103,7 @@ def analyze_stocks(tickers, start_date, end_date, num_portfolios, risk_free_rate
 # because we only care about when returns were less than target
 #downside deviation is a risk measure that focuses on returns that fall below a minimum threshold or target return level
 def calculate_downside_deviation(daily_returns, weights, target_return=0.0):
-    portfolio_returns = daily_returns.dot(weights)  # take dot product of weights and returns
+    portfolio_returns = daily_returns.dot(weights)  # take dot product of weights and returns, the dot product is, simply put, a measure of similarity between two vectors
     downside_diff = target_return - portfolio_returns #calculate the difference between the target return and the portfolio return
     downside_diff[downside_diff < 0] = 0 
     downside_deviation = np.sqrt(np.mean(np.square(downside_diff))) #square the difference, take the mean, and take the square root
@@ -138,10 +138,10 @@ def main():
     portfolio = ['ETH-USD', 'COIN', 'AAPL', 'MSFT', 'NVDA', 'JPM', 'DIS', 'AMZN', 'AMD', 'GOOGL', 'TSLA', 'JNJ'] #add stocks to this list
     start_date = '2020-01-01'
     end_date = '2023-01-01'
-    num_portfolios = 10000
-    risk_free_rate = 0.02
-    results = analyze_stocks(portfolio, start_date, end_date, num_portfolios, risk_free_rate)
-    print("Top 5 portfolios based on Sharpe Ratio:\n", results['top_portfolios'])
+    num_portfolios = 10000 #number of portfolios to simulate
+    risk_free_rate = 0.02 #risk free rate
+    results = analyze_stocks(portfolio, start_date, end_date, num_portfolios, risk_free_rate) #run the analysis
+    print("Top 5 portfolios based on Sharpe Ratio:\n", results['top_portfolios']) #print the top 5 portfolios
 
     return results
 
