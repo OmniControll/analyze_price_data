@@ -64,8 +64,10 @@ def optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate):
         neg_sharpe_ratio = - (expected_portfolio_return - risk_free_rate) / np.sqrt(portfolio_variance) #negated sharpe ratio
         return neg_sharpe_ratio
     
-# we want only one constraint: the sum of the weights must equal 100%. we use a lambda with x as argument to represent the weights of our assets in the portfolio
-    constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1}) 
+# we want constraints: the sum of the weights must equal 100%. we use a lambda with x as argument to represent the weights of our assets in the portfolio
+    sum_weights_is_one = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+    max_single_weight = {'type': 'ineq', 'fun': lambda x: 0.25 - np.max(x)} #max weight of any single asset is 25% (new constraint)
+    constraints = [sum_weights_is_one, max_single_weight] #combine the constraints into a list
     #bounds for each weight (0,1)
     bounds = [(0, 1) for _ in range(num_assets)] #list comprehension
     #starting point
@@ -126,9 +128,9 @@ def plot_monte_carlo_results(monte_carlo_results, optimized_weights, optimized_r
                     marker=dict(size=[30], color=['blue']), #formatting
                     hovertext=[', '.join([f"{ticker}: {weight:.2f}" for ticker, weight in optimized_weights.items()])], #formatting
                     name="Optimized Portfolio")
-    print("About to show figure...")
+    print("About to show figure...") #debugging
     fig.show()
-    print("Figure should be displayed.")
+    print("Figure should be displayed.") #debugging
 
 
 #a few things to note about the basket of stocks to pick:
@@ -136,9 +138,9 @@ def plot_monte_carlo_results(monte_carlo_results, optimized_weights, optimized_r
 # size of basket: we want to pick stocks that are not too correlated, but we also want to pick enough stocks to diversify our portfolio
 
 def main():
-    portfolio = ['ETH-USD', 'COIN', 'AAPL', 'MSFT', 'NVDA', 'JPM', 'DIS', 'AMZN', 'AMD', 'GOOGL', 'TSLA', 'JNJ'] #add stocks to this list
+    portfolio = ['NVDA', 'TSLA', 'COIN', 'MSFT', 'AMZN', 'AAPL', 'GOOGL', 'AMD', 'ASML'] #add stocks to this list
     start_date = '2020-01-01'
-    end_date = '2023-01-01'
+    end_date = '2023-10-16'
     num_portfolios = 10000 #number of portfolios to simulate
     risk_free_rate = 0.02 #risk free rate
     results = analyze_stocks(portfolio, start_date, end_date, num_portfolios, risk_free_rate) #run the analysis
