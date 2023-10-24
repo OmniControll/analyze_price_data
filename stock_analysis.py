@@ -19,10 +19,10 @@ def calculate_daily_returns(stock_data):
     return daily_returns
 
 def calculate_expected_returns(daily_returns): 
-    return daily_returns.mean() #mean() calculates the average of the values in the array
+    return daily_returns.mean() # average of the values in the array
 
 def calculate_covariance_matrix(daily_returns): 
-    return daily_returns.cov() #cov() calculates the covariance between the columns of a Df
+    return daily_returns.cov() #cov() calculates the covariance between the columns
 
 def calculate_portfolio_variance(weights, covariance_matrix): #calculates portfolio variance
     return np.dot(weights.T, np.dot(covariance_matrix, weights)) #np.dot() calculates the dot product of two arrays
@@ -138,9 +138,9 @@ def plot_monte_carlo_results(monte_carlo_results, optimized_weights, optimized_r
 # size of basket: we want to pick stocks that are not too correlated, but we also want to pick enough stocks to diversify our portfolio
 
 def main():
-    portfolio = ['NVDA', 'TSLA', 'COIN', 'MSFT', 'AMZN', 'AAPL', 'GOOGL', 'AMD', 'ASML'] #add stocks to this list
+    portfolio = ['NVDA', 'TSLA', 'COIN', 'GOOGL'] #add stocks to this list
     start_date = '2020-01-01'
-    end_date = '2023-10-16'
+    end_date = '2023-10-24'
     num_portfolios = 10000 #number of portfolios to simulate
     risk_free_rate = 0.02 #risk free rate
     results = analyze_stocks(portfolio, start_date, end_date, num_portfolios, risk_free_rate) #run the analysis
