@@ -3,7 +3,11 @@ import yfinance as yf
 from scipy.optimize import minimize
 import pandas as pd
 import plotly.express as px
-import ta
+import dash
+from dash import dcc
+from dash import html
+from dash.dependencies import Input, Output
+
 
 #This code is modular, with functions handling specific tasks.
 #The goal is to handle data fetching, financial calculations, optimization, and visualization.
@@ -11,58 +15,41 @@ import ta
 
 #first lets get the stock data from yfinance and do some basic financial calculations
 
-def fetch_stock_data(tickers, start_date, end_date):
-    stock_data = yf.download(tickers, start=start_date, end=end_date)['Adj Close']
-
-    sectors, technical_indicators, market_caps, RSIs, MACDs, moving_averages, moving_averages_200 = {}, {}, {}, {}, {}, {}, {}
-
-    for ticker in tickers:
-        ticker_info = yf.Ticker(ticker).info
-
-        sectors[ticker] = ticker_info.get('sector', 'N/A')
-        technical_indicators[ticker] = ticker_info.get('fiftyTwoWeekHigh', 'N/A')
-        market_caps[ticker] = ticker_info.get('marketCap', 'N/A')
-        
-        # Get historical data for calculations
-        hist_data = yf.download(ticker, start=start_date, end=end_date)
-        
-        # Calculate RSI
-        RSIs[ticker] = ta.momentum.RSIIndicator(close=hist_data['Close']).rsi().iloc[-1] #RSI is a momentum indicator that measures the magnitude of recent price changes to evaluate overbought or oversold conditions in the price of a stock or other asset
-        
-        # Calculate MACD
-        macd = ta.trend.MACD(close=hist_data['Close']) #MACD is a trend-following momentum indicator that shows the relationship between two moving averages of a security’s price
-        MACDs[ticker] = macd.macd_diff().iloc[-1] #macd_diff() calculates the difference between the MACD and the signal line
-        
-        # Calculate moving averages
-        moving_averages[ticker] = hist_data['Close'].rolling(window=50).mean().iloc[-1] #rolling() calculates the moving average
-        moving_averages_200[ticker] = hist_data['Close'].rolling(window=200).mean().iloc[-1] #rolling() calculates the moving average
-
-    return {
-        'stock_data': stock_data,
-        'sectors': sectors,
-        'technical_indicators': technical_indicators,
-        'market_caps': market_caps,
-        'RSIs': RSIs,
-        'MACDs': MACDs,
-        'moving_averages': moving_averages,
-        'moving_averages_200': moving_averages_200
-    }
+def fetch_stock_data(tickers, start_date, end_date): #fetches stock data from yfinance
+    stock_data = yf.download(tickers, start=start_date, end=end_date)['Adj Close'] #get the adjusted close price for each stock
+    return stock_data
 
 def calculate_daily_returns(stock_data): 
     daily_returns = stock_data.pct_change().dropna() #pct_change() calculates the percentage change between the current and prior element
     return daily_returns
 
+
+
+def calculate_rsi(df, column="Adj Close", window=14):
+    delta = df[column].diff(1)
+    gain = (delta.where(delta > 0, 0)).rolling(window=window, min_periods=1).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window, min_periods=1).mean()
+    
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    
+    return rsi
+
+def calculate_macd(df, column="Adj Close", short_window=12, long_window=26, signal_window=9):
+    short_ema = df[column].ewm(span=short_window, adjust=False).mean()
+    long_ema = df[column].ewm(span=long_window, adjust=False).mean()
+
+    macd = short_ema - long_ema
+    signal_line = macd.ewm(span=signal_window, adjust=False).mean()
+
+    return macd, signal_line
+
 def calculate_expected_returns(daily_returns): 
     return daily_returns.mean() # average of the values in the array
 
+
 def calculate_covariance_matrix(daily_returns): 
     return daily_returns.cov() #cov() calculates the covariance between the columns
-
-def calculate_sortino_ratio(expected_returns, daily_returns, risk_free_rate): #calculates sortino ratio
-    downside_deviation = calculate_downside_deviation(daily_returns, weights, target_return=0.0) #calculate downside deviation
-    expected_portfolio_return = np.sum(weights * expected_returns) #calculate expected portfolio return
-    sortino_ratio = (expected_portfolio_return - risk_free_rate) / downside_deviation #sortino ratio
-    return sortino_ratio
 
 def calculate_max_drawdown(daily_returns): #calculates max drawdown
     cumulative_returns = (1 + daily_returns).cumprod() #cumprod() calculates the cumulative product of the array
@@ -77,6 +64,15 @@ def calculate_value_at_risk(daily_returns, weights, confidence_level=0.05): #cal
 
 def calculate_portfolio_variance(weights, covariance_matrix): #calculates portfolio variance
     return np.dot(weights.T, np.dot(covariance_matrix, weights)) #np.dot() calculates the dot product of two arrays
+
+
+def calculate_sortino_ratio(expected_returns, daily_returns, risk_free_rate, weights):
+    downside_deviation = calculate_downside_deviation(daily_returns, weights, target_return=0.0)
+    expected_portfolio_return = np.sum(weights * expected_returns)
+    sortino_ratio = (expected_portfolio_return - risk_free_rate) / downside_deviation
+    return sortino_ratio
+
+
     
 #monte carlo simulation 
 def monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, risk_free_rate): #simulates random portfolios
@@ -144,15 +140,14 @@ def plot_new_metrics(results):
 # We also list the simulated portfolios by their Sharpe ratio in descending order, and select the top 5..
 
 def analyze_stocks(tickers, start_date, end_date, num_portfolios, risk_free_rate): #analyzes stocks
-    fetched_data = fetch_stock_data(tickers, start_date, end_date) #fetch stock data
-    stock_data = fetched_data['stock_data'] #get stock data
-    daily_returns = calculate_daily_returns(stock_data) #calculate daily returns
+    fetched_data = fetch_stock_data(tickers, start_date, end_date)  #fetch stock data
+    daily_returns = calculate_daily_returns(fetched_data)  #calculate daily returns
     expected_returns = calculate_expected_returns(daily_returns) #calculate expected returns
     covariance_matrix = calculate_covariance_matrix(daily_returns) #calculate covariance matrix
-
     # New metrics calculations
     optimized_weights_np = optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate) #optimize sharpe ratio
-    sortino_ratio = calculate_sortino_ratio(expected_returns, daily_returns, risk_free_rate) #calculate sortino ratio
+    sortino_ratio = calculate_sortino_ratio(expected_returns, daily_returns, risk_free_rate, optimized_weights_np)
+
     max_drawdown = calculate_max_drawdown(daily_returns) #calculate max drawdown
     value_at_risk = calculate_value_at_risk(daily_returns, optimized_weights_np) #calculate value at risk
 
@@ -200,6 +195,36 @@ def plot_monte_carlo_results(monte_carlo_results, optimized_weights, optimized_r
     print("About to show figure...") #debugging
     fig.show()
     print("Figure should be displayed.") #debugging
+
+app = dash.Dash(__name__)
+
+app.layout = html.Div([
+    dcc.Dropdown(
+        id='stock-dropdown',
+        options=[{'label': 'TSLA', 'value': 'TSLA'}, {'label': 'COIN', 'value': 'COIN'}, {'label': 'GOOGL', 'value': 'GOOGL'}],
+        value=['TSLA', 'COIN', 'GOOGL'],
+        multi=True
+    ),
+    dcc.Graph(id='monte-carlo-graph'),
+    dcc.Graph(id='additional-metrics-graph')
+])
+
+@app.callback(
+    [Output('monte-carlo-graph', 'figure'),
+     Output('additional-metrics-graph', 'figure')],
+    [Input('stock-dropdown', 'value')]
+)
+def update_graph(selected_stocks):
+    results = analyze_stocks(selected_stocks, '2020-01-01', '2023-10-28', 10000, 0.02)
+    monte_carlo_fig = plot_monte_carlo_results(results['monte_carlo_results'], 
+                                               results['optimized_weights'], 
+                                               results['top_portfolios'].iloc[0]['return'], 
+                                               results['top_portfolios'].iloc[0]['volatility'])
+    metrics_fig = plot_new_metrics(results)
+    return monte_carlo_fig, metrics_fig
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
 
 
 #a few things to note about the basket of stocks to pick:
