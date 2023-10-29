@@ -3,6 +3,7 @@ import yfinance as yf
 from scipy.optimize import minimize
 import pandas as pd
 import plotly.express as px
+import ta
 
 #This code is modular, with functions handling specific tasks.
 #The goal is to handle data fetching, financial calculations, optimization, and visualization.
@@ -10,9 +11,42 @@ import plotly.express as px
 
 #first lets get the stock data from yfinance and do some basic financial calculations
 
-def fetch_stock_data(tickers, start_date, end_date): #fetches stock data from yfinance
-    stock_data = yf.download(tickers, start=start_date, end=end_date)['Adj Close'] #get the adjusted close price for each stock
-    return stock_data
+def fetch_stock_data(tickers, start_date, end_date):
+    stock_data = yf.download(tickers, start=start_date, end=end_date)['Adj Close']
+
+    sectors, technical_indicators, market_caps, RSIs, MACDs, moving_averages, moving_averages_200 = {}, {}, {}, {}, {}, {}, {}
+
+    for ticker in tickers:
+        ticker_info = yf.Ticker(ticker).info
+
+        sectors[ticker] = ticker_info.get('sector', 'N/A')
+        technical_indicators[ticker] = ticker_info.get('fiftyTwoWeekHigh', 'N/A')
+        market_caps[ticker] = ticker_info.get('marketCap', 'N/A')
+        
+        # Get historical data for calculations
+        hist_data = yf.download(ticker, start=start_date, end=end_date)
+        
+        # Calculate RSI
+        RSIs[ticker] = ta.momentum.RSIIndicator(close=hist_data['Close']).rsi().iloc[-1] #RSI is a momentum indicator that measures the magnitude of recent price changes to evaluate overbought or oversold conditions in the price of a stock or other asset
+        
+        # Calculate MACD
+        macd = ta.trend.MACD(close=hist_data['Close']) #MACD is a trend-following momentum indicator that shows the relationship between two moving averages of a security’s price
+        MACDs[ticker] = macd.macd_diff().iloc[-1] #macd_diff() calculates the difference between the MACD and the signal line
+        
+        # Calculate moving averages
+        moving_averages[ticker] = hist_data['Close'].rolling(window=50).mean().iloc[-1] #rolling() calculates the moving average
+        moving_averages_200[ticker] = hist_data['Close'].rolling(window=200).mean().iloc[-1] #rolling() calculates the moving average
+
+    return {
+        'stock_data': stock_data,
+        'sectors': sectors,
+        'technical_indicators': technical_indicators,
+        'market_caps': market_caps,
+        'RSIs': RSIs,
+        'MACDs': MACDs,
+        'moving_averages': moving_averages,
+        'moving_averages_200': moving_averages_200
+    }
 
 def calculate_daily_returns(stock_data): 
     daily_returns = stock_data.pct_change().dropna() #pct_change() calculates the percentage change between the current and prior element
@@ -23,6 +57,23 @@ def calculate_expected_returns(daily_returns):
 
 def calculate_covariance_matrix(daily_returns): 
     return daily_returns.cov() #cov() calculates the covariance between the columns
+
+def calculate_sortino_ratio(expected_returns, daily_returns, risk_free_rate): #calculates sortino ratio
+    downside_deviation = calculate_downside_deviation(daily_returns, weights, target_return=0.0) #calculate downside deviation
+    expected_portfolio_return = np.sum(weights * expected_returns) #calculate expected portfolio return
+    sortino_ratio = (expected_portfolio_return - risk_free_rate) / downside_deviation #sortino ratio
+    return sortino_ratio
+
+def calculate_max_drawdown(daily_returns): #calculates max drawdown
+    cumulative_returns = (1 + daily_returns).cumprod() #cumprod() calculates the cumulative product of the array
+    max_drawdown = np.max(np.maximum.accumulate(cumulative_returns) - cumulative_returns) #max drawdown
+    return max_drawdown
+
+def calculate_value_at_risk(daily_returns, weights, confidence_level=0.05): #calculates value at risk
+    portfolio_returns = daily_returns.dot(weights) #take dot product of weights and returns
+    value_at_risk = np.quantile(portfolio_returns, confidence_level) #value at risk
+    return value_at_risk
+
 
 def calculate_portfolio_variance(weights, covariance_matrix): #calculates portfolio variance
     return np.dot(weights.T, np.dot(covariance_matrix, weights)) #np.dot() calculates the dot product of two arrays
@@ -75,30 +126,48 @@ def optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate):
     optimized_weights = minimize(objective_function, initial_weights, method='SLSQP', bounds=bounds, constraints=constraints)
     return optimized_weights.x
 
+def plot_new_metrics(results):
+    # Create a DataFrame for the new metrics
+    new_metrics_df = pd.DataFrame({
+        'Sortino Ratio': [results['sortino_ratio']],
+        'Max Drawdown': [results['max_drawdown']],
+        'Value at Risk': [results['value_at_risk']]
+    })
+    
+    # Create a bar chart using Plotly
+    fig = px.bar(new_metrics_df, 
+                 title="Additional Portfolio Metrics", 
+                 labels={"value": "Metrics Value", "index": "Metrics"})
+    fig.show()
+
 # Now lets run our functions to analyze and optimize our stock portfolio. we'll use a risk free rate of 2%.
 # We also list the simulated portfolios by their Sharpe ratio in descending order, and select the top 5..
 
-def analyze_stocks(tickers, start_date, end_date, num_portfolios, risk_free_rate):
-    stock_data = fetch_stock_data(tickers, start_date, end_date)  # get stock data
-    daily_returns = calculate_daily_returns(stock_data) # calculate daily returns
-    expected_returns = calculate_expected_returns(daily_returns)  # calculate expected returns
-    covariance_matrix = calculate_covariance_matrix(daily_returns) # calculate covariance matrix
-    monte_carlo_results = monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, risk_free_rate)  # run monte carlo simulation
-    optimized_weights_np = optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate) # optimize for Sharpe ratio
-    
-    optimized_weights_list = optimized_weights_np.tolist() 
-    
-    optimized_weights_dict = dict(zip(tickers, optimized_weights_list)) #create a dictionary of the optimized weights, because we need to use it later
+def analyze_stocks(tickers, start_date, end_date, num_portfolios, risk_free_rate): #analyzes stocks
+    fetched_data = fetch_stock_data(tickers, start_date, end_date) #fetch stock data
+    stock_data = fetched_data['stock_data'] #get stock data
+    daily_returns = calculate_daily_returns(stock_data) #calculate daily returns
+    expected_returns = calculate_expected_returns(daily_returns) #calculate expected returns
+    covariance_matrix = calculate_covariance_matrix(daily_returns) #calculate covariance matrix
 
-    top_portfolios = monte_carlo_results.nlargest(10, 'sharpe_ratio')  # get top 10 portfolios by Sharpe ratio
+    # New metrics calculations
+    optimized_weights_np = optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate) #optimize sharpe ratio
+    sortino_ratio = calculate_sortino_ratio(expected_returns, daily_returns, risk_free_rate) #calculate sortino ratio
+    max_drawdown = calculate_max_drawdown(daily_returns) #calculate max drawdown
+    value_at_risk = calculate_value_at_risk(daily_returns, optimized_weights_np) #calculate value at risk
+
+    monte_carlo_results = monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, risk_free_rate) #monte carlo simulation
+    top_portfolios = monte_carlo_results.nlargest(5, 'sharpe_ratio')    #top 5 portfolios based on sharpe ratio
 
     results = {
-        "optimized_weights": optimized_weights_dict, 
-        "optimized_return": top_portfolios.iloc[0]['return'],
-        "optimized_volatility": top_portfolios.iloc[0]['volatility'],
-        "top_portfolios": top_portfolios,  # Now defined
-        "monte_carlo_results": monte_carlo_results,
+        'optimized_weights': dict(zip(tickers, optimized_weights_np.tolist())),
+        'sortino_ratio': sortino_ratio,
+        'max_drawdown': max_drawdown,
+        'value_at_risk': value_at_risk,
+        'top_portfolios': top_portfolios,
+        'monte_carlo_results': monte_carlo_results
     }
+    
     return results
 
 #for downside volatility, we need to replace the cases where returns exceeded the target return with 0, 
@@ -136,24 +205,22 @@ def plot_monte_carlo_results(monte_carlo_results, optimized_weights, optimized_r
 #a few things to note about the basket of stocks to pick:
 # correlation: different stocks in the same industry tend to move together, so we want to pick stocks that are not highly correlated
 # size of basket: we want to pick stocks that are not too correlated, but we also want to pick enough stocks to diversify our portfolio
-
 def main():
-    portfolio = ['NVDA', 'TSLA', 'COIN', 'GOOGL'] #add stocks to this list
+    portfolio = ['TSLA', 'COIN', 'GOOGL']
     start_date = '2020-01-01'
-    end_date = '2023-10-24'
-    num_portfolios = 10000 #number of portfolios to simulate
-    risk_free_rate = 0.02 #risk free rate
-    results = analyze_stocks(portfolio, start_date, end_date, num_portfolios, risk_free_rate) #run the analysis
-    print("Top 5 portfolios based on Sharpe Ratio:\n", results['top_portfolios']) #print the top 5 portfolios
+    end_date = '2023-10-28'
+    num_portfolios = 10000
+    risk_free_rate = 0.02
 
-    return results
+    results = analyze_stocks(portfolio, start_date, end_date, num_portfolios, risk_free_rate)
+    print("Top 5 portfolios based on Sharpe Ratio:\n", results['top_portfolios'])
+    
+    plot_monte_carlo_results(results['monte_carlo_results'], 
+                             results['optimized_weights'], 
+                             results['top_portfolios'].iloc[0]['return'], 
+                             results['top_portfolios'].iloc[0]['volatility'])
+                             
+    plot_new_metrics(results)
 
 if __name__ == "__main__":
-    results = main()
-    monte_carlo_results = results['monte_carlo_results']
-    plot_monte_carlo_results( 
-        monte_carlo_results, 
-        results['optimized_weights'], 
-        results['optimized_return'], 
-        results['optimized_volatility']
-    )
+    main()
