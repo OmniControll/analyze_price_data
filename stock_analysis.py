@@ -24,7 +24,6 @@ def calculate_daily_returns(stock_data):
     return daily_returns
 
 
-
 def calculate_rsi(df, column="Adj Close", window=14):
     delta = df[column].diff(1)
     gain = (delta.where(delta > 0, 0)).rolling(window=window, min_periods=1).mean()
@@ -36,10 +35,10 @@ def calculate_rsi(df, column="Adj Close", window=14):
     return rsi
 
 def calculate_macd(df, column="Adj Close", short_window=12, long_window=26, signal_window=9):
-    short_ema = df[column].ewm(span=short_window, adjust=False).mean()
-    long_ema = df[column].ewm(span=long_window, adjust=False).mean()
+    short_ema = df[column].ewm(span=short_window, adjust=False).mean() #ewm() calculates the exponential moving average
+    long_ema = df[column].ewm(span=long_window, adjust=False).mean() #span is the number of periods to average
 
-    macd = short_ema - long_ema
+    macd = short_ema - long_ema #macd is the difference between the short and long ema
     signal_line = macd.ewm(span=signal_window, adjust=False).mean()
 
     return macd, signal_line
@@ -123,18 +122,16 @@ def optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate):
     return optimized_weights.x
 
 def plot_new_metrics(results):
-    # Create a DataFrame for the new metrics
     new_metrics_df = pd.DataFrame({
-        'Sortino Ratio': [results['sortino_ratio']],
-        'Max Drawdown': [results['max_drawdown']],
-        'Value at Risk': [results['value_at_risk']]
+        'Metric': ['Sortino Ratio', 'Max Drawdown', 'Value at Risk'],
+        'Value': [results['sortino_ratio'], results['max_drawdown'], results['value_at_risk']]
     })
     
-    # Create a bar chart using Plotly
-    fig = px.bar(new_metrics_df, 
+    fig = px.bar(new_metrics_df, x='Metric', y='Value', 
                  title="Additional Portfolio Metrics", 
-                 labels={"value": "Metrics Value", "index": "Metrics"})
-    fig.show()
+                 labels={"Value": "Metrics Value", "Metric": "Metrics"})
+    
+    return fig
 
 # Now lets run our functions to analyze and optimize our stock portfolio. we'll use a risk free rate of 2%.
 # We also list the simulated portfolios by their Sharpe ratio in descending order, and select the top 5..
@@ -192,36 +189,45 @@ def plot_monte_carlo_results(monte_carlo_results, optimized_weights, optimized_r
                     marker=dict(size=[30], color=['blue']), #formatting
                     hovertext=[', '.join([f"{ticker}: {weight:.2f}" for ticker, weight in optimized_weights.items()])], #formatting
                     name="Optimized Portfolio")
-    print("About to show figure...") #debugging
-    fig.show()
-    print("Figure should be displayed.") #debugging
+
+    return fig #return the figure, to be displayed in the Dash app renderer
+
 
 app = dash.Dash(__name__)
 
+# In Dash Layout
 app.layout = html.Div([
-    dcc.Dropdown(
-        id='stock-dropdown',
-        options=[{'label': 'TSLA', 'value': 'TSLA'}, {'label': 'COIN', 'value': 'COIN'}, {'label': 'GOOGL', 'value': 'GOOGL'}],
-        value=['TSLA', 'COIN', 'GOOGL'],
-        multi=True
+    dcc.Input(
+        id='stock-input',
+        type='text',
+        value='TSLA,COIN,GOOGL,NVDA,MSFT,BTC-USD, ETH-USD,SPY,QQQ,AMZN,AAPL,META,AMD,ASML',
+        style={'width': '50%'}
     ),
+    html.Button('Submit', id='stock-button', n_clicks=0),
     dcc.Graph(id='monte-carlo-graph'),
     dcc.Graph(id='additional-metrics-graph')
 ])
 
+# In Dash Callback
 @app.callback(
     [Output('monte-carlo-graph', 'figure'),
      Output('additional-metrics-graph', 'figure')],
-    [Input('stock-dropdown', 'value')]
+    [Input('stock-button', 'n_clicks')],
+    [dash.dependencies.State('stock-input', 'value')]
 )
-def update_graph(selected_stocks):
-    results = analyze_stocks(selected_stocks, '2020-01-01', '2023-10-28', 10000, 0.02)
-    monte_carlo_fig = plot_monte_carlo_results(results['monte_carlo_results'], 
-                                               results['optimized_weights'], 
-                                               results['top_portfolios'].iloc[0]['return'], 
+def update_graph(n_clicks, input_value):
+    if not input_value: #if input is empty
+        return dash.no_update, dash.no_update  # Do not update if input is empty
+
+    selected_stocks = [x.strip().upper() for x in input_value.split(',')] #split the input value by comma, and convert to uppercase
+    results = analyze_stocks(selected_stocks, '2020-01-01', '2023-10-28', 10000, 0.02) #analyze stocks
+    monte_carlo_fig = plot_monte_carlo_results(results['monte_carlo_results'],
+                                               results['optimized_weights'],
+                                               results['top_portfolios'].iloc[0]['return'],
                                                results['top_portfolios'].iloc[0]['volatility'])
     metrics_fig = plot_new_metrics(results)
     return monte_carlo_fig, metrics_fig
+
 
 if __name__ == '__main__':
     app.run_server(debug=True)
@@ -231,7 +237,7 @@ if __name__ == '__main__':
 # correlation: different stocks in the same industry tend to move together, so we want to pick stocks that are not highly correlated
 # size of basket: we want to pick stocks that are not too correlated, but we also want to pick enough stocks to diversify our portfolio
 def main():
-    portfolio = ['TSLA', 'COIN', 'GOOGL']
+    portfolio = ['TSLA', 'COIN', 'NVDA', 'MSFT']
     start_date = '2020-01-01'
     end_date = '2023-10-28'
     num_portfolios = 10000
