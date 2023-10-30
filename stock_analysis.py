@@ -29,8 +29,8 @@ def calculate_rsi(df, column="Adj Close", window=14):
     gain = (delta.where(delta > 0, 0)).rolling(window=window, min_periods=1).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=window, min_periods=1).mean()
     
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
+    rs = gain / loss #rs is the average gain over the average loss
+    rsi = 100 - (100 / (1 + rs)) #formula for rsi
     
     return rsi
 
@@ -43,7 +43,7 @@ def calculate_macd(df, column="Adj Close", short_window=12, long_window=26, sign
 
     return macd, signal_line
 
-def calculate_expected_returns(daily_returns): 
+def calculate_expected_returns(daily_returns):
     return daily_returns.mean() # average of the values in the array
 
 
@@ -72,7 +72,6 @@ def calculate_sortino_ratio(expected_returns, daily_returns, risk_free_rate, wei
     return sortino_ratio
 
 
-    
 #monte carlo simulation 
 def monte_carlo_simulation(expected_returns, covariance_matrix, num_portfolios, risk_free_rate): #simulates random portfolios
     num_assets = len(expected_returns) #number of assets in our portfolio
