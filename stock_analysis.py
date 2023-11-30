@@ -111,13 +111,13 @@ def optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate):
     
 # we want constraints: the sum of the weights must equal 100%. we use a lambda with x as argument to represent the weights of our assets in the portfolio
     sum_weights_is_one = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
-    max_single_weight = {'type': 'ineq', 'fun': lambda x: 0.25 - np.max(x)} #max weight of any single asset is 25% (new constraint)
+    max_single_weight = {'type': 'ineq', 'fun': lambda x: 0.80 - np.max(x)} #max weight of any single asset is 25% (new constraint)
     constraints = [sum_weights_is_one, max_single_weight] #combine the constraints into a list
     #bounds for each weight (0,1)
     bounds = [(0, 1) for _ in range(num_assets)] #list comprehension
     #starting point
     initial_weights = np.array([1 / num_assets] * num_assets) #initialize weights to 1/num_assets
-    optimized_weights = minimize(objective_function, initial_weights, method='SLSQP', bounds=bounds, constraints=constraints)
+    optimized_weights = minimize(objective_function, initial_weights, method='SLSQP', bounds=bounds, constraints=constraints) #minimize the objective function, use SLSQP method
     return optimized_weights.x
 
 def plot_new_metrics(results):
@@ -199,7 +199,7 @@ app.layout = html.Div([
     dcc.Input(
         id='stock-input',
         type='text',
-        value='TSLA,COIN,GOOGL,NVDA,MSFT,BTC-USD, ETH-USD,SPY,QQQ,AMZN,AAPL,META,AMD,ASML',
+        value='TSLA,COIN,GOOGL,NVDA,MSFT,BTC-USD, ETH-USD,SPY,QQQ,AMZN,AAPL,META,AMD,ASML', 
         style={'width': '50%'}
     ),
     html.Button('Submit', id='stock-button', n_clicks=0),
