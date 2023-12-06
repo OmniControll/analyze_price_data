@@ -6,7 +6,7 @@ import plotly.express as px
 import dash
 from dash import dcc
 from dash import html
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 
 
 #This code is modular, with functions handling specific tasks.
@@ -56,7 +56,11 @@ def calculate_max_drawdown(daily_returns): #calculates max drawdown
     return max_drawdown
 
 def calculate_value_at_risk(daily_returns, weights, confidence_level=0.05): #calculates value at risk
+    if daily_returns.empty:
+        raise ValueError('daily_returns is empty') #raise an error if daily returns is empty
     portfolio_returns = daily_returns.dot(weights) #take dot product of weights and returns
+    if len(portfolio_returns) == 0 or portfolio_returns.isna().any():
+        raise ValueError('daily_returns must have at least 2 values, or contain no NaNs')
     value_at_risk = np.quantile(portfolio_returns, confidence_level) #value at risk
     return value_at_risk
 
@@ -66,7 +70,7 @@ def calculate_portfolio_variance(weights, covariance_matrix): #calculates portfo
 
 
 def calculate_sortino_ratio(expected_returns, daily_returns, risk_free_rate, weights):
-    downside_deviation = calculate_downside_deviation(daily_returns, weights, target_return=0.0)
+    downside_deviation = calculate_downside_deviation(daily_returns, weights, target_return=0.15)
     expected_portfolio_return = np.sum(weights * expected_returns)
     sortino_ratio = (expected_portfolio_return - risk_free_rate) / downside_deviation
     return sortino_ratio
@@ -111,7 +115,7 @@ def optimize_sharpe_ratio(expected_returns, covariance_matrix, risk_free_rate):
     
 # we want constraints: the sum of the weights must equal 100%. we use a lambda with x as argument to represent the weights of our assets in the portfolio
     sum_weights_is_one = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
-    max_single_weight = {'type': 'ineq', 'fun': lambda x: 0.80 - np.max(x)} #max weight of any single asset is 25% (new constraint)
+    max_single_weight = {'type': 'ineq', 'fun': lambda x: 0.30 - np.max(x)} #max weight of any single asset is 25% (new constraint)
     constraints = [sum_weights_is_one, max_single_weight] #combine the constraints into a list
     #bounds for each weight (0,1)
     bounds = [(0, 1) for _ in range(num_assets)] #list comprehension
@@ -204,16 +208,48 @@ app.layout = html.Div([
     ),
     html.Button('Submit', id='stock-button', n_clicks=0),
     dcc.Graph(id='monte-carlo-graph'),
-    dcc.Graph(id='additional-metrics-graph')
+
+    html.Div(id='metrics-text')
 ])
 
-# In Dash Callback
+
 @app.callback(
     [Output('monte-carlo-graph', 'figure'),
-     Output('additional-metrics-graph', 'figure')],
+     Output('metrics-text', 'children')],
     [Input('stock-button', 'n_clicks')],
-    [dash.dependencies.State('stock-input', 'value')]
+    [State('stock-input', 'value')]
 )
+def update_metrics(n_clicks, input_value):
+    # Check if the input is empty
+    if not input_value or input_value.strip() == '':
+        # Return an empty figure and a message
+        return {}, 'Please enter stock tickers to see metrics.'
+
+    try:
+        # Process input and analyze stocks
+        selected_stocks = [x.strip().upper() for x in input_value.split(',')]
+        results = analyze_stocks(selected_stocks, '2020-01-01', '2023-10-28', 10000, 0.02)
+
+        # Generate the Monte Carlo plot figure
+        monte_carlo_fig = plot_monte_carlo_results(results['monte_carlo_results'],
+                                                   results['optimized_weights'],
+                                                   results['top_portfolios'].iloc[0]['return'],
+                                                   results['top_portfolios'].iloc[0]['volatility'])
+
+        # Prepare the metrics text
+        metrics_text = f"""
+        Sortino Ratio: {results['sortino_ratio']:.2f}
+        Max Drawdown: {results['max_drawdown']:.2f}
+        Value at Risk: {results['value_at_risk']:.2f}
+        """
+
+        return monte_carlo_fig, metrics_text
+
+    except Exception as e:
+        # Handle exceptions that occur during analysis
+        return {}, f"An error occurred during analysis: {str(e)}"
+
+
 def update_graph(n_clicks, input_value):
     if not input_value: #if input is empty
         return dash.no_update, dash.no_update  # Do not update if input is empty
